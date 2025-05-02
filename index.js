@@ -2,6 +2,7 @@ const express = require('express')
 const axios = require('axios')
 const cors = require('cors')
 const moment = require('moment-timezone')
+const { v4: uuidv4 } = require('uuid')
 
 require('dotenv').config()
 
@@ -97,14 +98,19 @@ app.get('/api/lookup', async (req, res) => {
 app.post('/api/create-contact', async (req, res) => {
   const { mobile } = req.body
 
+  let payload = {
+    contact: {
+      id: uuidv4().slice(0, 8),
+      name: `3cx-${mobile}`,
+      mobile: mobile,
+      notes: ['Created from 3CX API']
+    }
+  }
+
+  console.log("payload", payload)
   try {
     const response = await axios.post(
-      `https://${process.env.REAMAZE_BRAND}.reamaze.io/api/v1/contacts`,
-      {
-        name: `3cx-${mobile}`,
-        mobile: mobile,
-        notes: 'Created from 3CX API',
-      },
+      `https://${process.env.REAMAZE_BRAND}.reamaze.io/api/v1/contacts`, payload,
       {
         auth: {
           username: username,
@@ -117,10 +123,12 @@ app.post('/api/create-contact', async (req, res) => {
       }
     )
 
-    return res.json({ success: true, contactId: response.data._id })
+    return res.json({ success: true, contact: response.data })
   } catch (error) {
-    console.error('Create contact error:', error.message)
-    return res.status(500).json({ error: 'Failed to create contact' })
+    return res.status(error.response?.status || 500).json({
+      error: 'Failed to create contact',
+      details: error.response?.data || error.message
+    })
   }
 })
 
