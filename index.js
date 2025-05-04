@@ -41,11 +41,11 @@ app.use((req, res, next) => {
     return res.status(401).json({ error: 'Authentication required' })
   }
 
-  // const token = Buffer.from(authHeader.split(' ')[1], 'base64').toString('utf-8').split(':')[0]
+  const token = Buffer.from(authHeader.split(' ')[1], 'base64').toString('utf-8').split(':')[0]
 
-  // if (token === process.env.REAMAZE_API_TOKEN) {
-  return next()
-  // }
+  if (token === process.env.REAMAZE_API_TOKEN) {
+    return next()
+  }
 
   res.status(401).json({ error: 'Invalid authentication token' })
 })
@@ -86,7 +86,36 @@ app.get('/api/lookup', async (req, res) => {
 
     if (contact) {
       contact.contactUrl = `https://${process.env.REAMAZE_BRAND}.reamaze.com/admin/users/${contact._id}`
-      res.json({ contact })
+      res.json({ success: true, contact: contact })
+    } else if (searchType == "mobile") {
+      let payload = {
+        contact: {
+          id: uuidv4(),
+          name: `3cx Caller - ${searchTerm}`,
+          mobile: searchTerm,
+          notes: ['Created from 3CX API']
+        }
+      }
+
+      const response = await axios.post(
+        `https://${process.env.REAMAZE_BRAND}.reamaze.io/api/v1/contacts`, payload,
+        {
+          auth: {
+            username: username,
+            password: password
+          },
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+          }
+        }
+      )
+
+      contact = response.data
+
+      contact.contactUrl = `https://${process.env.REAMAZE_BRAND}.reamaze.com/admin/users/${contact._id}`
+
+      return res.json({ success: true, contact: contact })
     } else {
       res.status(404).json({ error: 'Contact not found' })
     }
