@@ -1,158 +1,173 @@
-# 📞 3CX - Re\:amaze Integration
+# 📞 3CX to Re:amaze Integration
 
-This project provides a Node.js-based integration between **3CX Phone System** and **Re****:amaze**, allowing you to:
+This project integrates **3CX Phone System** with **Re:amaze** using Node.js to:
 
-- Lookup existing contacts in Re\:amaze by phone number or email.
-- Create new Re\:amaze contacts from 3CX call logs.
-- Automatically log call journal entries (inbound/outbound) as Re\:amaze conversations.
+- Lookup or create Re:amaze contacts from 3CX.
+- Log call activity using Re:amaze's **custom voice channel API**.
 
----
-
-## 🚀 Features
-
-- 🔍 **Contact Lookup** — Search Re\:amaze contacts by phone or email
-- ➕ **Create Contact** — Add a new contact in Re\:amaze with a 3CX mobile number
-- 🗂️ **Log Call History** — Send call metadata (start time, duration, agent, etc.) to Re\:amaze as a conversation
-- 🌐 **CORS-enabled** and includes simple **API Key-based auth**
-
----
-
-## 🛠 Tech Stack
-
-- Node.js (Express.js)
-- Axios (for external API calls)
-- Moment-Timezone (for date/time conversion to EDT)
-- Dotenv (environment variable config)
+It exposes a small HTTP API which is configured as a **custom CRM template inside 3CX**.
 
 ---
 
 ## 🔧 Setup Instructions
 
-1. **Clone the repository**
+1. **Clone and install**
 
 ```bash
-git clone https://github.com/yourusername/3cx-reamaze-integration.git
+git clone https://github.com/your-org/3cx-reamaze-integration.git
 cd 3cx-reamaze-integration
-```
-
-2. **Install dependencies**
-
-```bash
 npm install
 ```
 
-3. **Configure environment variables**
+2. **Environment Variables**
 
-Create a `.env` file in the root directory:
+Create a `.env` file:
 
 ```env
-REAMAZE_USERNAME=your_reamaze_email
+REAMAZE_USERNAME=your_reamaze_username
 REAMAZE_API_TOKEN=your_reamaze_api_token
-REAMAZE_BRAND=your_reamaze_subdomain (e.g., mycompany if your URL is mycompany.reamaze.io)
+REAMAZE_BRAND=your_subdomain  # e.g. "mycompany" if your domain is mycompany.reamaze.io
 PORT=3000
 ```
 
-4. **Run the server**
+3. **Start the Server**
 
 ```bash
 node index.js
 ```
 
+You should see: `Server running on port 3000`
+
 ---
 
 ## 🔐 Authentication
 
-All API requests require an `Authorization` header with a base64-encoded token:
+All API requests must include a **Base64-encoded token** in the Authorization header:
 
-```bash
-Authorization: Basic base64(api_token:dummy)
+```
+Authorization: Basic BASE64_TOKEN
 ```
 
-Only the **token** part is validated for now.
+The `BASE64_TOKEN` must decode to `REAMAZE_API_TOKEN:anything`. Only the token part is checked.
 
 ---
 
-## 📡 API Endpoints
+## 🚀 API Endpoints
 
 ### `GET /api/lookup`
+**(Used as the lookup endpoint in 3CX CRM template)**
 
-**Lookup a contact by phone or email**
+This is actually a **get-or-create** endpoint:
 
-**Query Parameters:**
+- It checks if a contact exists in Re:amaze using phone number or email.
+- If not found and a phone number is provided, it creates the contact on the fly.
+- Returns a contact object so 3CX proceeds to the next step (call logging).
 
-- `number` (optional)
+**Query Params:**
+- `number` (required if `email` not given)
 - `email` (optional)
 
-Returns a contact object and contact URL if found.
-
----
-
-### `POST /api/create-contact`
-
-**Create a new contact using a mobile number**
-
-**Body Parameters:**
-
+**Success Response:**
 ```json
 {
-  "mobile": "+1234567890"
+  "success": true,
+  "contact": {
+    "name": "3cx Caller - +15555551234",
+    "contactUrl": "https://<brand>.reamaze.com/admin/users/<id>"
+  }
 }
 ```
 
 ---
 
-### `POST /api/call-journal`
+### `POST /api/v1/call-journal`
+**(Used for logging calls via 3CX call journal)**
 
-**Log a call event as a Re****:amaze**** conversation**
+Uses the **Re:amaze custom voice channel** to log call data.
+This works even if the contact has no email, and allows voice events to be grouped by thread.
 
-**Body Parameters:**
+- Creates a voice message in Re:amaze for the given call.
+- HMAC is generated and sent in the `X-Reamaze-Hmac-SHA256` header.
+
+**Request Headers:**
+- `Authorization: Basic BASE64_TOKEN`
+
+**Sample Body Dictionary for 3CX:**
+Paste this dictionary into your 3CX Call Journaling setup:
 
 ```json
 {
-  "number": "+1234567890",
-  "direction": "Inbound" | "Outbound",
-  "durationSeconds": 120,
-  "callStartTimeUTC": "04/29/2025 18:00:00",
-  "callEndTimeUTC": "04/29/2025 18:02:00",
-  "agentFirstName": "John",
-  "agentEmail": "john@example.com"
+  "number": "[Number]",
+  "direction": "[CallDirection]",
+  "type": "[CallType]",
+  "name": "[Name]",
+  "entityType": "[EntityType]",
+  "agent": "[Agent]",
+  "agentFirstName": "[AgentFirstName]",
+  "agentLastName": "[AgentLastName]",
+  "agentEmail": "[AgentEmail]",
+  "durationSeconds": "[DurationSeconds]",
+  "durationMinutes": "[DurationMinutes]",
+  "dateTime": "[DateTime]",
+  "callStartTimeUTC": "[CallStartTimeUTC]",
+  "callEstablishedTimeUTC": "[CallEstablishedTimeUTC]",
+  "callEndTimeUTC": "[CallEndTimeUTC]",
+  "subject": "[Subject]",
+  "inboundCallText": "[InboundCallText]",
+  "missedCallText": "[MissedCallText]",
+  "outboundCallText": "[OutboundCallText]",
+  "notAnsweredOutboundCallText": "[NotAnsweredOutboundCallText]"
 }
 ```
 
-Adds a conversation entry with formatted details in Re\:amaze.
+**Success Response:**
+```json
+{
+  "success": true,
+  "response": {
+    ...reamaze response...
+  }
+}
+```
 
 ---
 
-## 🧪 Testing
+## 🧪 Health Check
 
-You can test endpoints using tools like **Postman** or **curl**. Make sure your Authorization header is correct and your `.env` is populated.
+```bash
+GET /
+```
+Returns: `Server is running`
+
+---
+
+## 📦 Deploying
+
+You can deploy this to Vercel, Render, or your own server. Make sure to set environment variables.
 
 ---
 
 ## 🧼 Logging
 
-- All incoming requests are timestamped.
-- Errors are logged to console with full Re\:amaze API response (if available).
+- Logs all incoming requests and key actions to the console.
+- Errors include full stack trace and response details from Re:amaze.
 
 ---
 
-## 📦 Deployment
+## 🛡️ Notes
 
-Supports deployment on platforms like **Vercel** or **Render**. Make sure to configure environment variables via their respective UI.
-
----
-
-## 📬 Support / Issues
-
-For issues, bugs, or feature requests, please open a GitHub Issue.
+- Contact creation is skipped if email is missing **unless** using the voice channel.
+- Voice channel does not require email — great for unknown callers.
+- Uses `moment-timezone` for EDT conversion.
+- Uses `crypto` to sign payloads for secure HMAC authentication with Re:amaze.
 
 ---
 
 ## 📄 License
 
-MIT License
+MIT
 
 ---
 
-> Built with ❤️ to automate call insights into Re\:amaze
+> Built to make 3CX + Re:amaze call tracking seamless, even for first-time callers.
 
