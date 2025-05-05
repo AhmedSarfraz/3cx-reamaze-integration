@@ -86,13 +86,14 @@ app.get('/api/lookup', async (req, res) => {
 
     if (contact) {
       contact.contactUrl = `https://${process.env.REAMAZE_BRAND}.reamaze.com/admin/users/${contact._id}`
-      res.json({ success: true, contact: contact })
-    } else if (searchType == "mobile") {
+
+      return res.json({ success: true, contact: contact })
+    } else if (number) {
       let payload = {
         contact: {
           id: uuidv4(),
-          name: `3cx Caller - ${searchTerm}`,
-          mobile: searchTerm,
+          name: `3cx Caller - ${number}`,
+          mobile: number,
           notes: ['Created from 3CX API']
         }
       }
@@ -110,107 +111,18 @@ app.get('/api/lookup', async (req, res) => {
           }
         }
       )
-
       contact = response.data
-
       contact.contactUrl = `https://${process.env.REAMAZE_BRAND}.reamaze.com/admin/users/${contact._id}`
 
       return res.json({ success: true, contact: contact })
     } else {
-      res.status(404).json({ error: 'Contact not found' })
+      return res.status(404).json({ error: 'Contact not found' })
     }
   } catch (error) {
     console.error('Lookup error:', error.message)
-    res.status(500).json({ error: 'Server error' })
+    return res.status(500).json({ error: 'Server error' })
   }
 })
-
-
-// Call Journal
-app.post('/api/call-journal', async (req, res) => {
-  try {
-    console.log("req.body", req.body)
-    const { number, direction, durationSeconds, callStartTimeUTC, callEndTimeUTC, agentFirstName, agentEmail } = req.body
-
-    // Parse times as UTC and convert to EDT
-    const startTimeEDT = moment.utc(callStartTimeUTC, 'MM/DD/YYYY HH:mm:ss')
-      .tz('America/New_York')
-      .format('MM/DD/YYYY HH:mm:ss')
-
-    const endTimeEDT = moment.utc(callEndTimeUTC, 'MM/DD/YYYY HH:mm:ss')
-      .tz('America/New_York')
-      .format('MM/DD/YYYY HH:mm:ss')
-
-    const minutes = Math.floor(durationSeconds / 60)
-    const seconds = durationSeconds % 60
-
-    // Find or create contact
-    const contactResponse = await axios.get(
-      `https://${process.env.REAMAZE_BRAND}.reamaze.io/api/v1/contacts?q=${number}&type=mobile`,
-      {
-        auth: {
-          username: username,
-          password: password
-        },
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json'
-        }
-      }
-    )
-
-    let contact = contactResponse.data.contacts?.[0]
-
-    if (!contact || !contact.email) {
-      return res.status(404).json({ error: 'Contact not found' })
-    }
-
-    let converstaion_body = `Call Details: \n\nType: ${direction} \nStart Time: ${startTimeEDT} \nDuration: ${minutes}mins ${seconds}secs \nEnd Time: ${endTimeEDT}`
-    if (direction == "Outbound" && agentFirstName && agentEmail)
-      converstaion_body += `\nAgent: ${agentFirstName} - (${agentEmail})`
-
-    let payload = {
-      conversation: {
-        subject: `3CX Call: ${number}`,
-        category: 'support',
-        message: {
-          body: converstaion_body,
-        },
-        user: { name: contact.name, email: contact.email }
-      }
-    }
-
-    console.log("payload", payload)
-
-    // Create conversation
-    const conversation = await axios.post(
-      `https://${process.env.REAMAZE_BRAND}.reamaze.io/api/v1/conversations`,
-      payload,
-      {
-        auth: {
-          username: username,
-          password: password
-        },
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json'
-        }
-      }
-    )
-
-    return res.json({ success: true })
-  } catch (error) {
-    console.error('Call journal error:', error.message)
-    if (error.response) {
-      console.error('Response data:', error.response.data)
-    }
-    return res.status(500).json({
-      error: 'Failed to process call',
-      details: error.response?.data || error.message
-    })
-  }
-})
-
 
 app.post("/api/v1/call-journal", async (req, res) => {
   try {
